@@ -538,9 +538,18 @@ except Exception:
 
 TOKEN = os.environ.get('DISCORD_TOKEN') or os.environ.get('TOKEN')
 if not TOKEN:
+    print("ERROR: Discord bot token not found!")
+    print("Please set the DISCORD_TOKEN or TOKEN environment variable.")
     raise RuntimeError("Discord bot token not found. Please set the DISCORD_TOKEN environment variable.")
 
 if __name__ == '__main__':
     # Helpful reminder for operators
     print('Starting bot — ensure DISCORD_TOKEN is set in your environment.')
-    bot.run(TOKEN)
+    print('Attempting to connect to Discord...')
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"FATAL ERROR: Bot failed to start: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
