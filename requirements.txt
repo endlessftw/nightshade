@@ -1,0 +1,11 @@
+pytz>=2021.1
+# On some systems (Windows), you may also need tzdata for zoneinfo
+tzdata
+discord.py>=2.3.0
+python-dotenv
+aiohttp
+Pillow
+# Voice support (PyNaCl) and optional streaming support
+pynacl
+yt-dlp
+# Note: ffmpeg is a system binary and must be installed separately and available on PATH.
