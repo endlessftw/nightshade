@@ -26,9 +26,16 @@ wheels/
 .installed.cfg
 *.egg
 
-# Data Files (you may want to keep these or not)
-*.json
-!requirements.txt
+# Data Files - Allow templates, ignore actual data
+userphone_stats.json
+giveaway_config.json
+timechannel_config.json
+welcomer_config.json
+warnings.json
+
+# But allow template files
+!*_template.json
+!.template.json
 
 # Logs
 *.log
@@ -37,6 +44,7 @@ wheels/
 venv/
 env/
 ENV/
+.venv/
 
 # IDE
 .vscode/
@@ -48,13 +56,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
-
-# Discord Bot Specific
-userphone_stats.json
-giveaway_config.json
-timechannel_config.json
-welcomer_config.json
-warnings.json
 
 # Images (optional - remove if you want to include images)
 # *.png

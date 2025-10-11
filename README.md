@@ -48,8 +48,8 @@ A feature-rich Discord bot with moderation, games, utilities, and more!
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-cd YOUR_REPO_NAME
+git clone https://github.com/endlessftw/nightshade.git
+cd nightshade
 ```
 
 2. Install required dependencies:
@@ -57,17 +57,44 @@ cd YOUR_REPO_NAME
 pip install -r requirements.txt
 ```
 
-3. Create a `config.json` file in the root directory:
-```json
-{
-    "token": "YOUR_BOT_TOKEN_HERE"
-}
+3. Set up data files from templates:
+```bash
+python setup.py
 ```
 
-4. Run the bot:
+4. Set your bot token as an environment variable:
+
+**Windows (PowerShell):**
+```powershell
+$env:DISCORD_TOKEN="YOUR_BOT_TOKEN_HERE"
+```
+
+**Linux/Mac:**
+```bash
+export DISCORD_TOKEN="YOUR_BOT_TOKEN_HERE"
+```
+
+**Or create a `.env` file:**
+```
+DISCORD_TOKEN=YOUR_BOT_TOKEN_HERE
+```
+
+5. Run the bot:
 ```bash
 python main.py
 ```
+
+## Deploying to Render
+
+1. Fork/clone this repository
+2. Create a new Web Service on [Render](https://render.com)
+3. Connect your GitHub repository
+4. Set the following:
+   - **Build Command:** `pip install -r requirements.txt && python setup.py`
+   - **Start Command:** `python main.py`
+5. Add environment variable:
+   - Key: `DISCORD_TOKEN`
+   - Value: Your Discord bot token
 
 ## Requirements
 
