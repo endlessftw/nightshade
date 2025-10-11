@@ -96,6 +96,8 @@ python main.py
    - Key: `DISCORD_TOKEN`
    - Value: Your Discord bot token
 
+**Note:** Render's Linux servers include DejaVu fonts by default, which the bot will automatically use for image generation commands (`/aura`, `/ship`). No additional font installation needed!
+
 ## Requirements
 
 - Python 3.10 or higher
