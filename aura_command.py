@@ -120,16 +120,32 @@ class AuraCommand(commands.Cog):
         # Draw percentage text on top of the bar (centered). Use stroke for visibility
         try:
             from PIL import ImageFont
-            font_size = 28
-            try:
-                font = ImageFont.truetype("arial.ttf", font_size)
-            except Exception:
+            font_size = 48
+            font = None
+            # Try multiple font paths
+            font_paths = [
+                "arial.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                "/System/Library/Fonts/Helvetica.ttc",
+                "C:\\Windows\\Fonts\\arial.ttf",
+            ]
+            for font_path in font_paths:
+                try:
+                    font = ImageFont.truetype(font_path, font_size)
+                    break
+                except:
+                    continue
+            
+            # If no truetype font found, use default but increase size estimate
+            if font is None:
                 font = ImageFont.load_default()
+                font_size = 28  # Adjust for default font
         except Exception:
             # Fallback if PIL.ImageFont import fails for some reason
             from PIL import ImageFont as _IF
             font = _IF.load_default()
-            font_size = 14
+            font_size = 28
 
         text = f"{percent}%"
         # Measure text size (use textbbox when available)

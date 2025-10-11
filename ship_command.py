@@ -148,16 +148,31 @@ class ShipCog(commands.Cog):
         draw = ImageDraw.Draw(image)
         
         # Try to load a font, fall back to default if not available
-        try:
-            font_large = ImageFont.truetype("arial.ttf", 60)
-            font_small = ImageFont.truetype("arial.ttf", 30)
-        except:
+        font_large = None
+        font_small = None
+        
+        # Try multiple common font paths for different operating systems
+        font_paths = [
+            "arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "C:\\Windows\\Fonts\\arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ]
+        
+        for font_path in font_paths:
             try:
-                font_large = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 60)
-                font_small = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 30)
+                font_large = ImageFont.truetype(font_path, 80)
+                font_small = ImageFont.truetype(font_path, 40)
+                break
             except:
-                font_large = ImageFont.load_default()
-                font_small = ImageFont.load_default()
+                continue
+        
+        # If no font found, use default
+        if font_large is None:
+            font_large = ImageFont.load_default()
+            font_small = ImageFont.load_default()
         
         # Draw compatibility percentage
         percentage_text = f"{compatibility}%"
