@@ -130,18 +130,14 @@ class RPSGameView(discord.ui.View):
             bot = getattr(interaction, 'client', None) or getattr(interaction, 'bot', None)
             if bot is None:
                 bot = getattr(self, 'bot', None)
-            if bot is not None and hasattr(bot, 'user_wins_rps'):
-                if result == 1:
-                    bot.user_wins_rps[self.player1.id] = bot.user_wins_rps.get(self.player1.id, 0) + 1
-                elif result == 2:
-                    bot.user_wins_rps[self.player2.id] = bot.user_wins_rps.get(self.player2.id, 0) + 1
-                # best-effort save
-                try:
-                    save_coro = getattr(bot, 'save_stats', None)
-                    if save_coro is not None:
-                        await save_coro()
-                except Exception:
-                    pass
+            if bot is not None:
+                inc_fn = getattr(bot, 'increment_win_rps', None)
+                if inc_fn is not None and result in (1, 2):
+                    winner_id = self.player1.id if result == 1 else self.player2.id
+                    try:
+                        await inc_fn(winner_id)
+                    except Exception as e:
+                        print(f"Failed to save rps win: {e}")
         except Exception:
             pass
 

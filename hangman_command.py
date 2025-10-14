@@ -333,16 +333,12 @@ class HangmanView(discord.ui.View):
         if self.game_over and self.winner:
             try:
                 bot = getattr(interaction.client, 'bot', None) or interaction.client
-                wins = getattr(bot, 'user_wins_hangman', None)
-                if wins is not None:
-                    wins[self.winner.id] = wins.get(self.winner.id, 0) + 1
-                    # Persist stats if available
-                    save_fn = getattr(bot, 'save_stats', None)
-                    if save_fn is not None:
-                        try:
-                            await save_fn()
-                        except Exception:
-                            pass
+                inc_fn = getattr(bot, 'increment_win_hangman', None)
+                if inc_fn is not None:
+                    try:
+                        await inc_fn(self.winner.id)
+                    except Exception as e:
+                        print(f"Failed to save hangman win: {e}")
             except Exception:
                 pass
         

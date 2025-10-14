@@ -8,4 +8,7 @@ Pillow
 # Voice support (PyNaCl) and optional streaming support
 pynacl
 yt-dlp
+# Database support
+asyncpg>=0.29.0
+aiosqlite>=0.19.0
 # Note: ffmpeg is a system binary and must be installed separately and available on PATH.

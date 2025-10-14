@@ -9,8 +9,7 @@ from datetime import datetime
 class WarnCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.warnings_file = os.path.join(os.path.dirname(__file__), 'warnings.json')
-        self.warnings = self.load_warnings()
+        self.db = getattr(bot, 'db', None)
     
     @app_commands.command(name='warn', description='Warn a user for breaking rules')
     @app_commands.describe(
@@ -66,32 +65,24 @@ class WarnCog(commands.Cog):
                 return
         
         try:
-            # Create warning entry
-            guild_id = str(interaction.guild.id)
-            user_id = str(user.id)
+            # Add warning to database
+            if not self.db:
+                await interaction.response.send_message(
+                    "❌ Database not available. Cannot save warnings.",
+                    ephemeral=True
+                )
+                return
             
-            # Initialize guild warnings if needed
-            if guild_id not in self.warnings:
-                self.warnings[guild_id] = {}
+            warning_id = await self.db.add_warning(
+                interaction.guild.id,
+                user.id,
+                interaction.user.id,
+                reason
+            )
             
-            # Initialize user warnings if needed
-            if user_id not in self.warnings[guild_id]:
-                self.warnings[guild_id][user_id] = []
-            
-            # Add warning
-            warning = {
-                'reason': reason,
-                'moderator_id': interaction.user.id,
-                'moderator_name': str(interaction.user),
-                'timestamp': datetime.utcnow().isoformat(),
-                'warning_id': len(self.warnings[guild_id][user_id]) + 1
-            }
-            
-            self.warnings[guild_id][user_id].append(warning)
-            self.save_warnings()
-            
-            # Get total warnings
-            total_warnings = len(self.warnings[guild_id][user_id])
+            # Get total warnings for this user
+            warnings = await self.db.get_warnings(interaction.guild.id, user.id)
+            total_warnings = len(warnings)
             
             # Try to DM the user
             try:
@@ -119,7 +110,7 @@ class WarnCog(commands.Cog):
             embed.add_field(name="Reason", value=reason, inline=False)
             embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
             embed.add_field(name="Total Warnings", value=str(total_warnings), inline=True)
-            embed.add_field(name="Warning ID", value=f"#{warning['warning_id']}", inline=True)
+            embed.add_field(name="Warning ID", value=f"#{warning_id}", inline=True)
             embed.set_thumbnail(url=user.display_avatar.url)
             
             await interaction.response.send_message(embed=embed)
@@ -140,11 +131,18 @@ class WarnCog(commands.Cog):
         interaction: discord.Interaction, 
         user: discord.Member
     ):
-        guild_id = str(interaction.guild.id)
-        user_id = str(user.id)
+        if not self.db:
+            await interaction.response.send_message(
+                "❌ Database not available.",
+                ephemeral=True
+            )
+            return
+        
+        # Get warnings from database
+        warnings_list = await self.db.get_warnings(interaction.guild.id, user.id)
         
         # Check if user has any warnings
-        if guild_id not in self.warnings or user_id not in self.warnings[guild_id] or not self.warnings[guild_id][user_id]:
+        if not warnings_list:
             await interaction.response.send_message(
                 f"✅ **{user}** has no warnings in this server.",
                 ephemeral=True
@@ -154,25 +152,33 @@ class WarnCog(commands.Cog):
         # Create embed with all warnings
         embed = discord.Embed(
             title=f"<a:warn:1426420218518835263> Warnings for {user.name}",
-            description=f"Total warnings: **{len(self.warnings[guild_id][user_id])}**",
+            description=f"Total warnings: **{len(warnings_list)}**",
             color=discord.Color.orange(),
             timestamp=discord.utils.utcnow()
         )
         embed.set_thumbnail(url=user.display_avatar.url)
         
         # Add each warning as a field
-        for warning in self.warnings[guild_id][user_id]:
-            timestamp = datetime.fromisoformat(warning['timestamp'])
-            timestamp_unix = int(timestamp.timestamp())
+        for warning in warnings_list:
+            # Parse timestamp
+            if isinstance(warning['timestamp'], str):
+                timestamp = datetime.fromisoformat(warning['timestamp'].replace('Z', '+00:00'))
+            else:
+                timestamp = warning['timestamp']
+            timestamp_unix = int(timestamp.timestamp()) if hasattr(timestamp, 'timestamp') else int(datetime.fromisoformat(str(timestamp)).timestamp())
+            
+            # Get moderator mention
+            moderator = interaction.guild.get_member(warning['moderator_id'])
+            moderator_text = moderator.mention if moderator else f"<@{warning['moderator_id']}>"
             
             field_value = (
                 f"**Reason:** {warning['reason']}\n"
-                f"**Moderator:** {warning['moderator_name']}\n"
+                f"**Moderator:** {moderator_text}\n"
                 f"**Date:** <t:{timestamp_unix}:F>"
             )
             
             embed.add_field(
-                name=f"Warning #{warning['warning_id']}",
+                name=f"Warning #{warning['id']}",
                 value=field_value,
                 inline=False
             )
@@ -205,23 +211,7 @@ class WarnCog(commands.Cog):
                 ephemeral=True
             )
     
-    def load_warnings(self):
-        """Load warnings from file"""
-        try:
-            if os.path.isfile(self.warnings_file):
-                with open(self.warnings_file, 'r') as f:
-                    return json.load(f)
-        except Exception as e:
-            print(f"[warn] Error loading warnings: {e}")
-        return {}
-    
-    def save_warnings(self):
-        """Save warnings to file"""
-        try:
-            with open(self.warnings_file, 'w') as f:
-                json.dump(self.warnings, f, indent=2)
-        except Exception as e:
-            print(f"[warn] Error saving warnings: {e}")
+    # Database methods - no longer needed, handled by database.py
 
 
 async def setup(bot: commands.Bot):

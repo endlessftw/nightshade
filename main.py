@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import pathlib
 import logging
+from database import db
 
 # Enable verbose logging for discord voice debugging. Keep root level at INFO to avoid too much noise.
 logging.basicConfig(level=logging.INFO)
@@ -45,76 +46,42 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 call_queue = []
 # Active calls: {user_id: (partner_id, channel)}
 active_calls = {}
-# Stats for profile command (persisted to disk)
-userphone_message_count = {}
-userphone_started_count = {}
-# win counters
-user_wins_tictactoe = {}
-user_wins_connectfour = {}
-user_wins_rps = {}
-user_wins_hangman = {}
-
-# Persistence setup
-_STATS_PATH = os.path.join(os.path.dirname(__file__), 'userphone_stats.json')
-# Async lock to serialize saves
-save_lock = asyncio.Lock()
-
-def _write_file_atomic(path: str, data: dict):
-    tmp = path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
-
-def _load_stats_sync(path: str):
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            messages = {int(k): int(v) for k, v in data.get('messages', {}).items()}
-            started = {int(k): int(v) for k, v in data.get('started', {}).items()}
-            wins_ttt = {int(k): int(v) for k, v in data.get('wins_ttt', {}).items()}
-            wins_c4 = {int(k): int(v) for k, v in data.get('wins_c4', {}).items()}
-            wins_rps = {int(k): int(v) for k, v in data.get('wins_rps', {}).items()}
-            wins_hangman = {int(k): int(v) for k, v in data.get('wins_hangman', {}).items()}
-            return messages, started, wins_ttt, wins_c4, wins_rps, wins_hangman
-    except FileNotFoundError:
-        return {}, {}, {}, {}, {}, {}
-    except Exception as e:
-        print(f"Failed to load stats from {path}: {e}")
-        return {}, {}, {}, {}, {}, {}
-
-async def save_stats():
-    async with save_lock:
-        data = {
-            'messages': {str(k): v for k, v in userphone_message_count.items()},
-            'started': {str(k): v for k, v in userphone_started_count.items()},
-            'wins_ttt': {str(k): v for k, v in user_wins_tictactoe.items()},
-            'wins_c4': {str(k): v for k, v in user_wins_connectfour.items()},
-            'wins_rps': {str(k): v for k, v in user_wins_rps.items()},
-            'wins_hangman': {str(k): v for k, v in user_wins_hangman.items()},
-        }
-        # Perform blocking file write in a thread to avoid blocking the event loop
-        await asyncio.to_thread(_write_file_atomic, _STATS_PATH, data)
-
-# Load existing stats synchronously at import time
-loaded_messages, loaded_started, loaded_wins_ttt, loaded_wins_c4, loaded_wins_rps, loaded_wins_hangman = _load_stats_sync(_STATS_PATH)
-userphone_message_count.update(loaded_messages)
-userphone_started_count.update(loaded_started)
-user_wins_tictactoe.update(loaded_wins_ttt)
-user_wins_connectfour.update(loaded_wins_c4)
-user_wins_rps.update(loaded_wins_rps)
-user_wins_hangman.update(loaded_wins_hangman)
 
 from discord import app_commands
 
-# Expose stats dicts on the bot so external cogs can access them (myprofile_command.py)
-bot.userphone_message_count = userphone_message_count
-bot.userphone_started_count = userphone_started_count
-bot.user_wins_tictactoe = user_wins_tictactoe
-bot.user_wins_connectfour = user_wins_connectfour
-bot.user_wins_rps = user_wins_rps
-bot.user_wins_hangman = user_wins_hangman
-# make save_stats available to extensions via bot.save_stats()
+# Expose database on the bot so commands can access it
+bot.db = db
+
+# Helper functions for backward compatibility with existing code
+async def increment_userphone_messages(user_id: int):
+    await db.increment_stat(user_id, 'userphone_messages')
+
+async def increment_userphone_started(user_id: int):
+    await db.increment_stat(user_id, 'userphone_started')
+
+async def increment_win_tictactoe(user_id: int):
+    await db.increment_stat(user_id, 'wins_tictactoe')
+
+async def increment_win_connectfour(user_id: int):
+    await db.increment_stat(user_id, 'wins_connectfour')
+
+async def increment_win_rps(user_id: int):
+    await db.increment_stat(user_id, 'wins_rps')
+
+async def increment_win_hangman(user_id: int):
+    await db.increment_stat(user_id, 'wins_hangman')
+
+# Legacy compatibility: Provide save_stats that does nothing (DB auto-saves)
+async def save_stats():
+    pass  # No-op: database saves immediately
+
 bot.save_stats = save_stats
+bot.increment_userphone_messages = increment_userphone_messages
+bot.increment_userphone_started = increment_userphone_started
+bot.increment_win_tictactoe = increment_win_tictactoe
+bot.increment_win_connectfour = increment_win_connectfour
+bot.increment_win_rps = increment_win_rps
+bot.increment_win_hangman = increment_win_hangman
 
 
 # Timezone selector data (25 popular countries)
@@ -231,12 +198,10 @@ async def userphone(interaction: discord.Interaction):
         await interaction.response.send_message("You are already waiting for a call.", ephemeral=True)
         return
     # record that this user started a userphone
-    userphone_started_count[user_id] = userphone_started_count.get(user_id, 0) + 1
-    # persist stats
     try:
-        await save_stats()
+        await bot.increment_userphone_started(user_id)
     except Exception as e:
-        print(f"Failed to save stats after starting userphone: {e}")
+        print(f"Failed to save userphone start stat: {e}")
     call_queue.append((user_id, channel))
     # Track who initiated the call for each channel
     if not hasattr(bot, 'initiators'):
@@ -314,6 +279,14 @@ async def hangup(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+    
+    # Connect to database
+    try:
+        await db.connect()
+    except Exception as e:
+        print(f"❌ Failed to connect to database: {e}")
+        print("Bot will continue but data will not persist!")
+    
     # Set an initial presence showing how many servers the bot is in
     try:
         async def _update_presence():
@@ -515,12 +488,10 @@ async def on_message(message):
                     try:
                         sender_name = message.author.display_name
                         # increment message count for sender
-                        userphone_message_count[message.author.id] = userphone_message_count.get(message.author.id, 0) + 1
-                        # persist stats
                         try:
-                            await save_stats()
+                            await bot.increment_userphone_messages(message.author.id)
                         except Exception as e:
-                            print(f"Failed to save stats after message increment: {e}")
+                            print(f"Failed to save userphone message stat: {e}")
                         await partner_channel.send(f"**{sender_name}**📞: {message.content}")
                     except Exception:
                         await message.channel.send("Failed to deliver message.")

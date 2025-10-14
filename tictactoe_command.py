@@ -289,16 +289,13 @@ class TicTacToeButton(discord.ui.Button):
                 bot = getattr(interaction.client, 'bot', None) or interaction.client
                 # determine winner id
                 winner_id = self.ttt_view.player_x.id if winner == 'X' else self.ttt_view.player_o.id
-                wins = getattr(bot, 'user_wins_tictactoe', None)
-                if wins is not None:
-                    wins[winner_id] = wins.get(winner_id, 0) + 1
-                    # persist stats if available
-                    save_fn = getattr(bot, 'save_stats', None)
-                    if save_fn is not None:
-                        try:
-                            await save_fn()
-                        except Exception:
-                            pass
+                # Save win to database
+                inc_fn = getattr(bot, 'increment_win_tictactoe', None)
+                if inc_fn is not None:
+                    try:
+                        await inc_fn(winner_id)
+                    except Exception as e:
+                        print(f"Failed to save tictactoe win: {e}")
             except Exception:
                 pass
 

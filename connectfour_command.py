@@ -291,15 +291,12 @@ class ConnectFourButton(discord.ui.Button):
             try:
                 bot = interaction.client
                 winner_id = self.c4_view.player1.id if winner == 'X' else self.c4_view.player2.id
-                wins = getattr(bot, 'user_wins_connectfour', None)
-                if wins is not None:
-                    wins[winner_id] = wins.get(winner_id, 0) + 1
-                    save_fn = getattr(bot, 'save_stats', None)
-                    if save_fn is not None:
-                        try:
-                            await save_fn()
-                        except Exception:
-                            pass
+                inc_fn = getattr(bot, 'increment_win_connectfour', None)
+                if inc_fn is not None:
+                    try:
+                        await inc_fn(winner_id)
+                    except Exception as e:
+                        print(f"Failed to save connectfour win: {e}")
             except Exception:
                 pass
 

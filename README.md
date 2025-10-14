@@ -84,7 +84,9 @@ DISCORD_TOKEN=YOUR_BOT_TOKEN_HERE
 python main.py
 ```
 
-## Deploying to Render
+## Deploying to Render or DigitalOcean
+
+### Option 1: Render (Recommended - Easier Setup)
 
 1. Fork/clone this repository
 2. Create a new Web Service on [Render](https://render.com)
@@ -92,11 +94,51 @@ python main.py
 4. Set the following:
    - **Build Command:** `pip install -r requirements.txt && python setup.py`
    - **Start Command:** `python main.py`
-5. Add environment variable:
-   - Key: `DISCORD_TOKEN`
-   - Value: Your Discord bot token
+5. Add a **PostgreSQL database**:
+   - Create a new PostgreSQL database on Render
+   - Copy the **Internal Database URL**
+6. Add environment variables:
+   - Key: `DISCORD_TOKEN` / Value: Your Discord bot token
+   - Key: `DATABASE_URL` / Value: Your PostgreSQL database URL
 
 **Note:** Render's Linux servers include DejaVu fonts by default, which the bot will automatically use for image generation commands (`/aura`, `/ship`). No additional font installation needed!
+
+### Option 2: DigitalOcean App Platform
+
+1. Push your code to GitHub
+2. Create a new App on [DigitalOcean](https://www.digitalocean.com/products/app-platform)
+3. Connect your GitHub repository
+4. Add a **PostgreSQL database** (Dev Database is free):
+   - In your app settings, add a PostgreSQL database component
+   - DigitalOcean will automatically set the `DATABASE_URL` environment variable
+5. Set environment variables:
+   - Add `DISCORD_TOKEN` with your bot token
+6. Deploy!
+
+**Note:** Voice features (`/play`) may not work on DigitalOcean due to UDP restrictions. Consider using Railway.app for voice support.
+
+## Database Setup
+
+This bot uses **PostgreSQL** for persistent data storage (user stats, warnings, configs).
+
+### For Local Development:
+The bot will automatically use SQLite (`bot_data.db`) if no PostgreSQL is configured. No setup needed!
+
+### For Production:
+1. Create a PostgreSQL database on your hosting provider
+2. Set the `DATABASE_URL` environment variable
+3. The bot will automatically create tables on first run
+
+### Migrating Existing Data:
+If you have existing JSON files with data:
+```bash
+python migrate_to_database.py
+```
+
+This will transfer all data from:
+- `userphone_stats.json` → Database
+- `warnings.json` → Database  
+- Config files → Database
 
 ## Requirements
 

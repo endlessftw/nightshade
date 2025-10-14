@@ -9,7 +9,7 @@ from datetime import datetime
 class UnwarnCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.warnings_file = os.path.join(os.path.dirname(__file__), 'warnings.json')
+        self.db = getattr(bot, 'db', None)
     
     @app_commands.command(name='unwarn', description='Remove a warning from a user')
     @app_commands.describe(
@@ -23,31 +23,31 @@ class UnwarnCog(commands.Cog):
         user: discord.Member,
         warning_id: int
     ):
-        guild_id = str(interaction.guild.id)
-        user_id = str(user.id)
+        if not self.db:
+            await interaction.response.send_message(
+                "❌ Database not available.",
+                ephemeral=True
+            )
+            return
         
-        # Load current warnings
-        warnings = self.load_warnings()
+        # Check if warning exists
+        warnings_list = await self.db.get_warnings(interaction.guild.id, user.id)
         
-        # Check if user has any warnings
-        if guild_id not in warnings or user_id not in warnings[guild_id] or not warnings[guild_id][user_id]:
+        if not warnings_list:
             await interaction.response.send_message(
                 f"<a:warning:1424944783587147868> **{user}** has no warnings in this server.",
                 ephemeral=True
             )
             return
         
-        # Find the warning with the specified ID
+        # Find the warning
         warning_to_remove = None
-        warning_index = None
-        
-        for idx, warning in enumerate(warnings[guild_id][user_id]):
-            if warning['warning_id'] == warning_id:
+        for warning in warnings_list:
+            if warning['id'] == warning_id:
                 warning_to_remove = warning
-                warning_index = idx
                 break
         
-        if warning_to_remove is None:
+        if not warning_to_remove:
             await interaction.response.send_message(
                 f"<a:warning:1424944783587147868> Warning #{warning_id} not found for **{user}**.",
                 ephemeral=True
@@ -55,22 +55,19 @@ class UnwarnCog(commands.Cog):
             return
         
         try:
-            # Remove the warning
-            warnings[guild_id][user_id].pop(warning_index)
+            # Remove the warning from database
+            removed = await self.db.remove_warning(warning_id, interaction.guild.id)
             
-            # If user has no more warnings, remove the user entry
-            if not warnings[guild_id][user_id]:
-                del warnings[guild_id][user_id]
-            
-            # If guild has no more warnings, remove the guild entry
-            if not warnings[guild_id]:
-                del warnings[guild_id]
-            
-            # Save warnings
-            self.save_warnings(warnings)
+            if not removed:
+                await interaction.response.send_message(
+                    f"<a:warning:1424944783587147868> Failed to remove warning #{warning_id}.",
+                    ephemeral=True
+                )
+                return
             
             # Get remaining warnings count
-            remaining_warnings = len(warnings.get(guild_id, {}).get(user_id, []))
+            remaining_warnings_list = await self.db.get_warnings(interaction.guild.id, user.id)
+            remaining_warnings = len(remaining_warnings_list)
             
             # Try to DM the user
             try:
@@ -94,8 +91,12 @@ class UnwarnCog(commands.Cog):
                 color=discord.Color.green(),
                 timestamp=discord.utils.utcnow()
             )
+            # Get moderator mention
+            moderator = interaction.guild.get_member(warning_to_remove['moderator_id'])
+            moderator_text = moderator.mention if moderator else f"<@{warning_to_remove['moderator_id']}>"
+            
             embed.add_field(name="Original Reason", value=warning_to_remove['reason'], inline=False)
-            embed.add_field(name="Originally Given By", value=warning_to_remove['moderator_name'], inline=True)
+            embed.add_field(name="Originally Given By", value=moderator_text, inline=True)
             embed.add_field(name="Removed By", value=interaction.user.mention, inline=True)
             embed.add_field(name="Remaining Warnings", value=str(remaining_warnings), inline=True)
             embed.set_thumbnail(url=user.display_avatar.url)
@@ -118,14 +119,17 @@ class UnwarnCog(commands.Cog):
         interaction: discord.Interaction, 
         user: discord.Member
     ):
-        guild_id = str(interaction.guild.id)
-        user_id = str(user.id)
-        
-        # Load current warnings
-        warnings = self.load_warnings()
+        if not self.db:
+            await interaction.response.send_message(
+                "❌ Database not available.",
+                ephemeral=True
+            )
+            return
         
         # Check if user has any warnings
-        if guild_id not in warnings or user_id not in warnings[guild_id] or not warnings[guild_id][user_id]:
+        warnings_list = await self.db.get_warnings(interaction.guild.id, user.id)
+        
+        if not warnings_list:
             await interaction.response.send_message(
                 f"<a:warning:1424944783587147868> **{user}** has no warnings in this server.",
                 ephemeral=True
@@ -134,17 +138,10 @@ class UnwarnCog(commands.Cog):
         
         try:
             # Get warning count before clearing
-            warning_count = len(warnings[guild_id][user_id])
+            warning_count = len(warnings_list)
             
             # Clear all warnings for the user
-            del warnings[guild_id][user_id]
-            
-            # If guild has no more warnings, remove the guild entry
-            if not warnings[guild_id]:
-                del warnings[guild_id]
-            
-            # Save warnings
-            self.save_warnings(warnings)
+            cleared_count = await self.db.clear_warnings(interaction.guild.id, user.id)
             
             # Try to DM the user
             try:
@@ -205,23 +202,7 @@ class UnwarnCog(commands.Cog):
                 ephemeral=True
             )
     
-    def load_warnings(self):
-        """Load warnings from file"""
-        try:
-            if os.path.isfile(self.warnings_file):
-                with open(self.warnings_file, 'r') as f:
-                    return json.load(f)
-        except Exception as e:
-            print(f"[unwarn] Error loading warnings: {e}")
-        return {}
-    
-    def save_warnings(self, warnings):
-        """Save warnings to file"""
-        try:
-            with open(self.warnings_file, 'w') as f:
-                json.dump(warnings, f, indent=2)
-        except Exception as e:
-            print(f"[unwarn] Error saving warnings: {e}")
+    # Database methods - no longer needed, handled by database.py
 
 
 async def setup(bot: commands.Bot):
