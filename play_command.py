@@ -258,22 +258,32 @@ class PlayCog(commands.Cog):
             pass
         try:
             if voice_client is None:
-                voice_client = await voice_channel.connect()
+                # Try to connect with a longer timeout (60 seconds instead of default 30)
+                voice_client = await voice_channel.connect(timeout=60.0)
             else:
                 if voice_client.channel.id != voice_channel.id:
                     await voice_client.move_to(voice_channel)
+        except asyncio.TimeoutError:
+            # Voice connection timed out - likely network/firewall issue
+            await interaction.followup.send(
+                '❌ Failed to connect to voice: Connection timed out.\n'
+                'This usually means UDP traffic is blocked by the hosting provider.\n'
+                'Voice connections require UDP ports to be open.',
+                ephemeral=True
+            )
+            return
         except Exception as e:
             # Detect common missing dependency error (PyNaCl) and provide actionable advice
             err_text = str(e)
             if 'PyNaCl' in err_text or 'pynacl' in err_text.lower():
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     'Failed to connect to voice channel: PyNaCl is required for voice support.\n'
                     'Install it with `pip install pynacl` (on Windows: `python -m pip install pynacl`).\n'
                     'Also ensure ffmpeg is installed and available on PATH for audio playback.',
                     ephemeral=True,
                 )
             else:
-                await interaction.response.send_message(f'Failed to connect to voice channel: {e}', ephemeral=True)
+                await interaction.followup.send(f'❌ Failed to connect to voice channel: {e}', ephemeral=True)
             return
 
         # Try to find a local file matching the query
