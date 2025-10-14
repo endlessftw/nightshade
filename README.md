@@ -103,17 +103,21 @@ python main.py
 
 **Note:** Render's Linux servers include DejaVu fonts by default, which the bot will automatically use for image generation commands (`/aura`, `/ship`). No additional font installation needed!
 
-### Option 2: DigitalOcean App Platform
+### Option 2: DigitalOcean App Platform + Supabase (FREE!)
 
-1. Push your code to GitHub
-2. Create a new App on [DigitalOcean](https://www.digitalocean.com/products/app-platform)
-3. Connect your GitHub repository
-4. Add a **PostgreSQL database** (Dev Database is free):
-   - In your app settings, add a PostgreSQL database component
-   - DigitalOcean will automatically set the `DATABASE_URL` environment variable
-5. Set environment variables:
-   - Add `DISCORD_TOKEN` with your bot token
-6. Deploy!
+1. **Set up FREE database on Supabase:**
+   - Go to [supabase.com](https://supabase.com) and create a free account
+   - Create a new project (takes 2-3 minutes)
+   - Get your database URL from Settings → Database → Connection string
+   - See `DIGITALOCEAN_SETUP.md` for detailed steps
+
+2. **Deploy on DigitalOcean:**
+   - Create a new App on [DigitalOcean](https://www.digitalocean.com/products/app-platform)
+   - Connect your GitHub repository
+   - Set environment variables:
+     - `DISCORD_TOKEN` - Your Discord bot token
+     - `DATABASE_URL` - Your Supabase PostgreSQL URL
+   - Deploy!
 
 **Note:** Voice features (`/play`) may not work on DigitalOcean due to UDP restrictions. Consider using Railway.app for voice support.
 
@@ -124,10 +128,21 @@ This bot uses **PostgreSQL** for persistent data storage (user stats, warnings, 
 ### For Local Development:
 The bot will automatically use SQLite (`bot_data.db`) if no PostgreSQL is configured. No setup needed!
 
-### For Production:
-1. Create a PostgreSQL database on your hosting provider
-2. Set the `DATABASE_URL` environment variable
-3. The bot will automatically create tables on first run
+### For Production (FREE with Supabase):
+1. Create a **FREE** account on [Supabase](https://supabase.com)
+2. Create a new project (takes 2-3 minutes)
+3. Get your connection URL from Settings → Database
+4. Set the `DATABASE_URL` environment variable on your hosting platform
+5. The bot will automatically create tables on first run
+
+**See `DIGITALOCEAN_SETUP.md` for step-by-step Supabase setup instructions!**
+
+### Why Supabase?
+- ✅ **FREE Forever** (500MB database - perfect for Discord bots!)
+- ✅ **No Credit Card Required**
+- ✅ **Easy Setup** (5 minutes)
+- ✅ **View Your Data** in built-in dashboard
+- ✅ **Automatic Backups**
 
 ### Migrating Existing Data:
 If you have existing JSON files with data:
