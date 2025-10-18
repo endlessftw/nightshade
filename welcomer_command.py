@@ -16,6 +16,8 @@ class WelcomerCog(commands.Cog):
         self.welcome_channels = {}
         # Flag to track if config has been loaded
         self._config_loaded = False
+        # Load config after initialization
+        self.bot.loop.create_task(self._delayed_load_config())
     
     @app_commands.command(name='welcomer', description='Set up a welcome channel for new members')
     @app_commands.describe(channel='The channel where welcome messages will be sent')
@@ -64,6 +66,30 @@ class WelcomerCog(commands.Cog):
             traceback.print_exc()
             self.welcome_channels = {}
     
+    async def _delayed_load_config(self):
+        """Wait for database to be ready, then load config"""
+        import asyncio
+        
+        # Wait for bot to be ready
+        await self.bot.wait_until_ready()
+        
+        # Give database a moment to connect (it connects in on_ready)
+        for attempt in range(10):  # Try up to 10 times
+            await asyncio.sleep(0.5)  # Wait 500ms between attempts
+            
+            # Re-get the database reference in case it was set after cog init
+            self.db = getattr(self.bot, 'db', None)
+            
+            if self.db and (self.db.is_postgres or self.db.is_sqlite):
+                print(f"[welcomer] Database ready, loading config (attempt {attempt + 1})")
+                await self.load_config()
+                self._config_loaded = True
+                return
+            else:
+                print(f"[welcomer] Database not ready yet, retrying... (attempt {attempt + 1}/10)")
+        
+        print("[welcomer] ❌ Database not available after 10 attempts, config not loaded")
+    
     async def save_config(self):
         """Save welcome channel configuration to database"""
         if not self.db:
@@ -77,28 +103,6 @@ class WelcomerCog(commands.Cog):
             print(f"[welcomer] Saved configuration to database")
         except Exception as e:
             print(f"[welcomer] Error saving config to database: {e}")
-    
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Load configuration when bot is ready and database is connected"""
-        if not self._config_loaded:
-            # Wait a moment to ensure database is connected
-            import asyncio
-            for attempt in range(5):  # Try up to 5 times
-                await asyncio.sleep(0.5)  # Wait 500ms between attempts
-                
-                # Re-get the database reference in case it was set after cog init
-                self.db = getattr(self.bot, 'db', None)
-                
-                if self.db and (self.db.is_postgres or self.db.is_sqlite):
-                    await self.load_config()
-                    self._config_loaded = True
-                    break
-                else:
-                    if attempt < 4:
-                        print(f"[welcomer] Database not ready yet, retrying... (attempt {attempt + 1}/5)")
-                    else:
-                        print("[welcomer] Database not available after 5 attempts, config not loaded")
     
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
