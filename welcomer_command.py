@@ -11,11 +11,11 @@ from io import BytesIO
 class WelcomerCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # Dictionary to store {guild_id: channel_id} for welcome channels
+        self.db = getattr(bot, 'db', None)
+        # Dictionary to store {guild_id: channel_id} for welcome channels (cached in memory)
         self.welcome_channels = {}
-        self.config_file = os.path.join(os.path.dirname(__file__), 'welcomer_config.json')
-        # Load saved welcome channels
-        self.load_config()
+        # Load saved welcome channels from database
+        self.bot.loop.create_task(self.load_config())
     
     @app_commands.command(name='welcomer', description='Set up a welcome channel for new members')
     @app_commands.describe(channel='The channel where welcome messages will be sent')
@@ -28,37 +28,47 @@ class WelcomerCog(commands.Cog):
         # Store the welcome channel for this guild
         self.welcome_channels[interaction.guild.id] = channel.id
         
-        # Save to file
-        self.save_config()
+        # Save to database
+        await self.save_config()
         
         await interaction.response.send_message(
             f"✅ Welcome channel set to {channel.mention}!\nNew members will receive a welcome message there.",
             ephemeral=True
         )
     
-    def load_config(self):
-        """Load welcome channel configuration from file"""
+    async def load_config(self):
+        """Load welcome channel configuration from database"""
+        if not self.db:
+            print("[welcomer] Database not available, using empty config")
+            self.welcome_channels = {}
+            return
+        
         try:
-            if os.path.isfile(self.config_file):
-                with open(self.config_file, 'r') as f:
-                    data = json.load(f)
-                    # Convert string keys back to integers
-                    self.welcome_channels = {int(k): int(v) for k, v in data.items()}
-                    print(f"[welcomer] Loaded {len(self.welcome_channels)} welcome channel(s)")
+            config = await self.db.get_config('welcomer_config')
+            if config:
+                # Convert string keys back to integers
+                self.welcome_channels = {int(k): int(v) for k, v in config.items()}
+                print(f"[welcomer] Loaded {len(self.welcome_channels)} welcome channel(s) from database")
+            else:
+                self.welcome_channels = {}
+                print("[welcomer] No welcomer config found in database")
         except Exception as e:
-            print(f"[welcomer] Error loading config: {e}")
+            print(f"[welcomer] Error loading config from database: {e}")
             self.welcome_channels = {}
     
-    def save_config(self):
-        """Save welcome channel configuration to file"""
+    async def save_config(self):
+        """Save welcome channel configuration to database"""
+        if not self.db:
+            print("[welcomer] Database not available, cannot save config")
+            return
+        
         try:
-            # Convert integer keys to strings for JSON
+            # Convert integer keys to strings for JSON storage
             data = {str(k): v for k, v in self.welcome_channels.items()}
-            with open(self.config_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            print(f"[welcomer] Saved configuration")
+            await self.db.set_config('welcomer_config', data)
+            print(f"[welcomer] Saved configuration to database")
         except Exception as e:
-            print(f"[welcomer] Error saving config: {e}")
+            print(f"[welcomer] Error saving config to database: {e}")
     
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
