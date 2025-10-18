@@ -343,7 +343,8 @@ class Database:
                     'SELECT value FROM bot_config WHERE key = $1',
                     key
                 )
-                return dict(row['value']) if row else None
+                # row['value'] is already a dict (JSONB in PostgreSQL), no need to convert
+                return row['value'] if row else None
         else:
             async with self.sqlite_conn.execute(
                 'SELECT value FROM bot_config WHERE key = ?',
