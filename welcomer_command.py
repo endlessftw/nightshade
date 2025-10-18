@@ -43,6 +43,12 @@ class WelcomerCog(commands.Cog):
             self.welcome_channels = {}
             return
         
+        # Check if database is actually connected
+        if not (self.db.is_postgres or self.db.is_sqlite):
+            print("[welcomer] Database not yet connected, skipping config load")
+            self.welcome_channels = {}
+            return
+        
         try:
             config = await self.db.get_config('welcomer_config')
             if config:
@@ -54,6 +60,8 @@ class WelcomerCog(commands.Cog):
                 print("[welcomer] No welcomer config found in database")
         except Exception as e:
             print(f"[welcomer] Error loading config from database: {e}")
+            import traceback
+            traceback.print_exc()
             self.welcome_channels = {}
     
     async def save_config(self):
@@ -74,8 +82,23 @@ class WelcomerCog(commands.Cog):
     async def on_ready(self):
         """Load configuration when bot is ready and database is connected"""
         if not self._config_loaded:
-            await self.load_config()
-            self._config_loaded = True
+            # Wait a moment to ensure database is connected
+            import asyncio
+            for attempt in range(5):  # Try up to 5 times
+                await asyncio.sleep(0.5)  # Wait 500ms between attempts
+                
+                # Re-get the database reference in case it was set after cog init
+                self.db = getattr(self.bot, 'db', None)
+                
+                if self.db and (self.db.is_postgres or self.db.is_sqlite):
+                    await self.load_config()
+                    self._config_loaded = True
+                    break
+                else:
+                    if attempt < 4:
+                        print(f"[welcomer] Database not ready yet, retrying... (attempt {attempt + 1}/5)")
+                    else:
+                        print("[welcomer] Database not available after 5 attempts, config not loaded")
     
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
