@@ -3,7 +3,7 @@ import json
 import discord
 from discord.ext import commands
 from discord import app_commands
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont # type: ignore
 import aiohttp
 from io import BytesIO
 
@@ -133,25 +133,42 @@ class WelcomerCog(commands.Cog):
         
         # Try to load a nice font, fallback to default if not available
         try:
-            # Try different font paths for Windows
+            # Try different font paths (Windows, Linux, Mac)
             font_paths = [
-                "C:/Windows/Fonts/arial.ttf",
-                "C:/Windows/Fonts/segoeui.ttf",
-                "C:/Windows/Fonts/calibri.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux (Debian/Ubuntu)
+                "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",           # Linux (RHEL/CentOS)
+                "/usr/share/fonts/liberation/LiberationSans-Bold.ttf",   # Linux alternative
+                "C:/Windows/Fonts/arial.ttf",                            # Windows
+                "C:/Windows/Fonts/segoeui.ttf",                          # Windows
+                "/System/Library/Fonts/Helvetica.ttc",                   # macOS
             ]
             font = None
+            small_font = None
             for font_path in font_paths:
                 if os.path.isfile(font_path):
-                    font = ImageFont.truetype(font_path, 50)
-                    small_font = ImageFont.truetype(font_path, 35)
-                    break
+                    try:
+                        font = ImageFont.truetype(font_path, 60)        # Increased from 50
+                        small_font = ImageFont.truetype(font_path, 45)  # Increased from 35
+                        break
+                    except Exception:
+                        continue
             
+            # Fallback: use default font with size if available (Pillow 10+)
             if font is None:
+                try:
+                    font = ImageFont.load_default(size=60)
+                    small_font = ImageFont.load_default(size=45)
+                except TypeError:
+                    # Older Pillow version - size parameter not supported
+                    font = ImageFont.load_default()
+                    small_font = ImageFont.load_default()
+        except Exception:
+            try:
+                font = ImageFont.load_default(size=60)
+                small_font = ImageFont.load_default(size=45)
+            except TypeError:
                 font = ImageFont.load_default()
                 small_font = ImageFont.load_default()
-        except Exception:
-            font = ImageFont.load_default()
-            small_font = ImageFont.load_default()
         
         # Text position (right side of the avatar)
         text_x = 300
