@@ -14,8 +14,8 @@ class WelcomerCog(commands.Cog):
         self.db = getattr(bot, 'db', None)
         # Dictionary to store {guild_id: channel_id} for welcome channels (cached in memory)
         self.welcome_channels = {}
-        # Load saved welcome channels from database
-        self.bot.loop.create_task(self.load_config())
+        # Flag to track if config has been loaded
+        self._config_loaded = False
     
     @app_commands.command(name='welcomer', description='Set up a welcome channel for new members')
     @app_commands.describe(channel='The channel where welcome messages will be sent')
@@ -69,6 +69,13 @@ class WelcomerCog(commands.Cog):
             print(f"[welcomer] Saved configuration to database")
         except Exception as e:
             print(f"[welcomer] Error saving config to database: {e}")
+    
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Load configuration when bot is ready and database is connected"""
+        if not self._config_loaded:
+            await self.load_config()
+            self._config_loaded = True
     
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
