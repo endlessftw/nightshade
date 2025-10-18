@@ -343,8 +343,17 @@ class Database:
                     'SELECT value FROM bot_config WHERE key = $1',
                     key
                 )
-                # row['value'] is already a dict (JSONB in PostgreSQL), no need to convert
-                return row['value'] if row else None
+                if not row:
+                    return None
+                
+                # Handle both dict (new format) and string (old format with double JSON encoding)
+                value = row['value']
+                if isinstance(value, str):
+                    # Old format: was stored as json.dumps(dict), need to parse it
+                    return json.loads(value)
+                else:
+                    # New format: JSONB already returns a dict
+                    return value
         else:
             async with self.sqlite_conn.execute(
                 'SELECT value FROM bot_config WHERE key = ?',
@@ -362,7 +371,7 @@ class Database:
                     VALUES ($1, $2)
                     ON CONFLICT (key)
                     DO UPDATE SET value = $2
-                ''', key, json.dumps(value))
+                ''', key, value)  # PostgreSQL JSONB handles dicts directly, no json.dumps needed
         else:
             await self.sqlite_conn.execute('''
                 INSERT INTO bot_config (key, value)
