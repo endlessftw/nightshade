@@ -366,12 +366,14 @@ class Database:
         """Set a config value."""
         if self.is_postgres:
             async with self.pool.acquire() as conn:
+                # For JSONB columns, asyncpg needs the value as a JSON string
+                import json as json_module
                 await conn.execute('''
                     INSERT INTO bot_config (key, value)
-                    VALUES ($1, $2)
+                    VALUES ($1, $2::jsonb)
                     ON CONFLICT (key)
-                    DO UPDATE SET value = $2
-                ''', key, value)  # PostgreSQL JSONB handles dicts directly, no json.dumps needed
+                    DO UPDATE SET value = $2::jsonb
+                ''', key, json_module.dumps(value))
         else:
             await self.sqlite_conn.execute('''
                 INSERT INTO bot_config (key, value)
