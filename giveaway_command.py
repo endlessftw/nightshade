@@ -142,17 +142,22 @@ class GiveawayCog(commands.Cog):
     async def end_giveaway(self, message_id: int):
         """End a giveaway and pick winners"""
         if message_id not in self.active_giveaways:
+            print(f"[giveaway] end_giveaway called but {message_id} not in active giveaways")
             return
         
         giveaway_info = self.active_giveaways[message_id]
         
         if giveaway_info['ended']:
+            print(f"[giveaway] Giveaway {message_id} already ended, skipping")
             return
+        
+        print(f"[giveaway] Ending giveaway {message_id}")
         
         try:
             # Get the channel and message
             channel = self.bot.get_channel(giveaway_info['channel_id'])
             if not channel:
+                print(f"[giveaway] Channel {giveaway_info['channel_id']} not found for giveaway {message_id}")
                 del self.active_giveaways[message_id]
                 await self.save_config()
                 return
@@ -160,7 +165,14 @@ class GiveawayCog(commands.Cog):
             try:
                 message = await channel.fetch_message(message_id)
             except discord.errors.NotFound:
+                print(f"[giveaway] Message {message_id} not found in channel {channel.name}")
                 del self.active_giveaways[message_id]
+                await self.save_config()
+                return
+            except Exception as e:
+                print(f"[giveaway] Error fetching message {message_id}: {e}")
+                # Mark as ended even if we can't fetch the message
+                giveaway_info['ended'] = True
                 await self.save_config()
                 return
             
@@ -249,9 +261,16 @@ class GiveawayCog(commands.Cog):
             giveaway_info['ended'] = True
             giveaway_info['winners'] = [w.id for w in winners]
             await self.save_config()
+            print(f"[giveaway] ✅ Successfully ended giveaway {message_id} with {len(winners)} winner(s)")
             
         except Exception as e:
-            print(f"[giveaway] Error ending giveaway {message_id}: {e}")
+            print(f"[giveaway] ❌ Error ending giveaway {message_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Mark as ended even if there was an error to prevent infinite loops
+            giveaway_info['ended'] = True
+            await self.save_config()
+            print(f"[giveaway] Marked giveaway {message_id} as ended due to error")
     
     @commands.command(name='reroll')
     async def reroll(self, ctx, message_id: int = None):
@@ -485,7 +504,9 @@ class GiveawayCog(commands.Cog):
     
     async def _schedule_giveaway_end(self, message_id: int, seconds: float):
         """Schedule a giveaway to end after a delay"""
+        print(f"[giveaway] Timer started for giveaway {message_id}, will end in {seconds:.0f} seconds")
         await asyncio.sleep(seconds)
+        print(f"[giveaway] Timer expired for giveaway {message_id}, calling end_giveaway")
         await self.end_giveaway(message_id)
 
 
