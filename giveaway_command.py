@@ -11,10 +11,12 @@ from datetime import datetime, timedelta
 class GiveawayCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.db = getattr(bot, 'db', None)
         self.active_giveaways = {}
         self.config_file = os.path.join(os.path.dirname(__file__), 'giveaway_config.json')
-        # Load saved giveaways
-        self.load_config()
+        self._config_loaded = False
+        # Load config after bot is ready
+        self.bot.loop.create_task(self._delayed_load_config())
     
     @app_commands.command(name='giveaway', description='Start a giveaway in the current channel')
     @app_commands.describe(
@@ -96,7 +98,7 @@ class GiveawayCog(commands.Cog):
             'end_time': end_time.isoformat(),
             'ended': False
         }
-        self.save_config()
+        await self.save_config()
         
         # Acknowledge the interaction (required but silent)
         try:
@@ -152,14 +154,14 @@ class GiveawayCog(commands.Cog):
             channel = self.bot.get_channel(giveaway_info['channel_id'])
             if not channel:
                 del self.active_giveaways[message_id]
-                self.save_config()
+                await self.save_config()
                 return
             
             try:
                 message = await channel.fetch_message(message_id)
             except discord.errors.NotFound:
                 del self.active_giveaways[message_id]
-                self.save_config()
+                await self.save_config()
                 return
             
             # Get users who reacted with the giveaway emoji
@@ -188,7 +190,7 @@ class GiveawayCog(commands.Cog):
                 await message.edit(embed=embed)
                 
                 giveaway_info['ended'] = True
-                self.save_config()
+                await self.save_config()
                 return
             
             # Get all users who reacted (excluding bots)
@@ -219,7 +221,7 @@ class GiveawayCog(commands.Cog):
                 await message.edit(embed=embed)
                 
                 giveaway_info['ended'] = True
-                self.save_config()
+                await self.save_config()
                 return
             
             # Pick winners
@@ -246,7 +248,7 @@ class GiveawayCog(commands.Cog):
             # Mark as ended
             giveaway_info['ended'] = True
             giveaway_info['winners'] = [w.id for w in winners]
-            self.save_config()
+            await self.save_config()
             
         except Exception as e:
             print(f"[giveaway] Error ending giveaway {message_id}: {e}")
@@ -344,7 +346,7 @@ class GiveawayCog(commands.Cog):
             
             # Update stored winners
             giveaway_info['winners'] = [w.id for w in winners]
-            self.save_config()
+            await self.save_config()
             
             # Send confirmation in command channel if different
             if ctx.channel.id != channel.id:
@@ -354,50 +356,137 @@ class GiveawayCog(commands.Cog):
             await ctx.send(f"<a:warning:1424944783587147868> Error rerolling giveaway: {e}")
             print(f"[giveaway] Error rerolling giveaway {message_id}: {e}")
     
-    def load_config(self):
-        """Load giveaway configuration from file"""
+    async def _delayed_load_config(self):
+        """Wait for database to be ready, then load config"""
+        import asyncio
+        
+        # Wait for bot to be ready
+        await self.bot.wait_until_ready()
+        
+        # Give database a moment to connect
+        for attempt in range(10):
+            await asyncio.sleep(0.5)
+            
+            # Re-get the database reference
+            self.db = getattr(self.bot, 'db', None)
+            
+            if self.db and (self.db.is_postgres or self.db.is_sqlite):
+                print(f"[giveaway] Database ready, loading config (attempt {attempt + 1})")
+                await self.load_config()
+                self._config_loaded = True
+                return
+            else:
+                print(f"[giveaway] Database not ready yet, retrying... (attempt {attempt + 1}/10)")
+        
+        print("[giveaway] ❌ Database not available after 10 attempts, trying file fallback")
+        # Fallback to file-based config
+        self.load_config_from_file()
+    
+    def load_config_from_file(self):
+        """Load giveaway configuration from file (fallback)"""
         try:
             if os.path.isfile(self.config_file):
                 with open(self.config_file, 'r') as f:
                     data = json.load(f)
                     # Convert string keys back to integers
                     self.active_giveaways = {int(k): v for k, v in data.items()}
-                    print(f"[giveaway] Loaded {len(self.active_giveaways)} giveaway(s)")
+                    print(f"[giveaway] Loaded {len(self.active_giveaways)} giveaway(s) from file")
                     
                     # Restart timers for active giveaways
                     from datetime import timezone
                     for message_id, info in self.active_giveaways.items():
                         if not info['ended']:
                             end_time = datetime.fromisoformat(info['end_time'])
-                            # Make sure we're using timezone-aware datetime
                             if end_time.tzinfo is None:
                                 end_time = end_time.replace(tzinfo=timezone.utc)
                             now = datetime.now(timezone.utc)
                             if end_time > now:
-                                # Schedule the giveaway to end
                                 seconds_remaining = (end_time - now).total_seconds()
                                 asyncio.create_task(self._schedule_giveaway_end(message_id, seconds_remaining))
                             else:
-                                # Already past end time, end it now
                                 asyncio.create_task(self.end_giveaway(message_id))
         except Exception as e:
-            print(f"[giveaway] Error loading config: {e}")
+            print(f"[giveaway] Error loading config from file: {e}")
             self.active_giveaways = {}
     
-    async def _schedule_giveaway_end(self, message_id: int, seconds: float):
-        """Schedule a giveaway to end after a delay"""
-        await asyncio.sleep(seconds)
-        await self.end_giveaway(message_id)
+    async def load_config(self):
+        """Load giveaway configuration from database"""
+        if not self.db:
+            print("[giveaway] Database not available, using file fallback")
+            self.load_config_from_file()
+            return
+        
+        # Check if database is actually connected
+        if not (self.db.is_postgres or self.db.is_sqlite):
+            print("[giveaway] Database not yet connected, using file fallback")
+            self.load_config_from_file()
+            return
+        
+        try:
+            config = await self.db.get_config('giveaway_config')
+            if config:
+                # Convert string keys back to integers
+                self.active_giveaways = {int(k): v for k, v in config.items()}
+                print(f"[giveaway] Loaded {len(self.active_giveaways)} giveaway(s) from database")
+                
+                # Restart timers for active giveaways
+                from datetime import timezone
+                for message_id, info in self.active_giveaways.items():
+                    if not info['ended']:
+                        end_time = datetime.fromisoformat(info['end_time'])
+                        if end_time.tzinfo is None:
+                            end_time = end_time.replace(tzinfo=timezone.utc)
+                        now = datetime.now(timezone.utc)
+                        if end_time > now:
+                            # Schedule the giveaway to end
+                            seconds_remaining = (end_time - now).total_seconds()
+                            print(f"[giveaway] Restarting timer for giveaway {message_id}, {seconds_remaining:.0f}s remaining")
+                            asyncio.create_task(self._schedule_giveaway_end(message_id, seconds_remaining))
+                        else:
+                            # Already past end time, end it now
+                            print(f"[giveaway] Giveaway {message_id} already expired, ending now")
+                            asyncio.create_task(self.end_giveaway(message_id))
+            else:
+                self.active_giveaways = {}
+                print("[giveaway] No giveaway config found in database")
+        except Exception as e:
+            print(f"[giveaway] Error loading config from database: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to file
+            self.load_config_from_file()
     
-    def save_config(self):
-        """Save giveaway configuration to file"""
+    async def save_config(self):
+        """Save giveaway configuration to database"""
+        # Try database first
+        if self.db and (self.db.is_postgres or self.db.is_sqlite):
+            try:
+                # Convert integer keys to strings for JSON storage
+                data = {str(k): v for k, v in self.active_giveaways.items()}
+                await self.db.set_config('giveaway_config', data)
+                print(f"[giveaway] Saved {len(self.active_giveaways)} giveaway(s) to database")
+                return
+            except Exception as e:
+                print(f"[giveaway] Error saving config to database: {e}, falling back to file")
+        
+        # Fallback to file
+        self.save_config_to_file()
+    
+    def save_config_to_file(self):
+        """Save giveaway configuration to file (fallback)"""
         try:
             # Convert integer keys to strings for JSON
             data = {str(k): v for k, v in self.active_giveaways.items()}
             with open(self.config_file, 'w') as f:
                 json.dump(data, f, indent=2)
+            print(f"[giveaway] Saved {len(self.active_giveaways)} giveaway(s) to file")
         except Exception as e:
-            print(f"[giveaway] Error saving config: {e}")
+            print(f"[giveaway] Error saving config to file: {e}")
+    
+    async def _schedule_giveaway_end(self, message_id: int, seconds: float):
+        """Schedule a giveaway to end after a delay"""
+        await asyncio.sleep(seconds)
+        await self.end_giveaway(message_id)
 
 
 async def setup(bot: commands.Bot):
