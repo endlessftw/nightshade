@@ -421,9 +421,13 @@ class GiveawayCog(commands.Cog):
                             now = datetime.now(timezone.utc)
                             if end_time > now:
                                 seconds_remaining = (end_time - now).total_seconds()
-                                asyncio.create_task(self._schedule_giveaway_end(message_id, seconds_remaining))
+                                print(f"[giveaway] Restarting timer for giveaway {message_id}, {seconds_remaining:.0f}s remaining")
+                                task = asyncio.create_task(self._schedule_giveaway_end(message_id, seconds_remaining))
+                                task.add_done_callback(lambda t: self._task_done_callback(t, message_id))
                             else:
-                                asyncio.create_task(self.end_giveaway(message_id))
+                                print(f"[giveaway] Giveaway {message_id} already expired, ending immediately")
+                                task = asyncio.create_task(self.end_giveaway(message_id))
+                                task.add_done_callback(lambda t: self._task_done_callback(t, message_id))
         except Exception as e:
             print(f"[giveaway] Error loading config from file: {e}")
             self.active_giveaways = {}
@@ -460,11 +464,14 @@ class GiveawayCog(commands.Cog):
                             # Schedule the giveaway to end
                             seconds_remaining = (end_time - now).total_seconds()
                             print(f"[giveaway] Restarting timer for giveaway {message_id}, {seconds_remaining:.0f}s remaining")
-                            asyncio.create_task(self._schedule_giveaway_end(message_id, seconds_remaining))
+                            task = asyncio.create_task(self._schedule_giveaway_end(message_id, seconds_remaining))
+                            # Keep reference to prevent garbage collection
+                            task.add_done_callback(lambda t: self._task_done_callback(t, message_id))
                         else:
                             # Already past end time, end it now
-                            print(f"[giveaway] Giveaway {message_id} already expired, ending now")
-                            asyncio.create_task(self.end_giveaway(message_id))
+                            print(f"[giveaway] Giveaway {message_id} already expired, ending immediately")
+                            task = asyncio.create_task(self.end_giveaway(message_id))
+                            task.add_done_callback(lambda t: self._task_done_callback(t, message_id))
             else:
                 self.active_giveaways = {}
                 print("[giveaway] No giveaway config found in database")
@@ -508,6 +515,22 @@ class GiveawayCog(commands.Cog):
         await asyncio.sleep(seconds)
         print(f"[giveaway] Timer expired for giveaway {message_id}, calling end_giveaway")
         await self.end_giveaway(message_id)
+    
+    def _task_done_callback(self, task, message_id):
+        """Callback when a giveaway task completes"""
+        try:
+            # Check if task raised an exception
+            exception = task.exception()
+            if exception:
+                print(f"[giveaway] ❌ Task for giveaway {message_id} failed with exception: {exception}")
+                import traceback
+                traceback.print_exception(type(exception), exception, exception.__traceback__)
+            else:
+                print(f"[giveaway] ✅ Task for giveaway {message_id} completed successfully")
+        except asyncio.CancelledError:
+            print(f"[giveaway] Task for giveaway {message_id} was cancelled")
+        except Exception as e:
+            print(f"[giveaway] Error in task callback for giveaway {message_id}: {e}")
 
 
 async def setup(bot: commands.Bot):
