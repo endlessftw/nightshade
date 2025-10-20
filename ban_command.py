@@ -10,7 +10,7 @@ class BanCog(commands.Cog):
     
     @app_commands.command(name='ban', description='Ban a user from the server')
     @app_commands.describe(
-        user='The user to ban',
+        user='The user to ban (can be a member or user ID)',
         reason='Reason for the ban (optional)',
         delete_message_days='Delete messages from the last X days (0-7, default: 0)'
     )
@@ -18,7 +18,7 @@ class BanCog(commands.Cog):
     async def ban(
         self, 
         interaction: discord.Interaction, 
-        user: discord.Member, 
+        user: discord.User,  # Changed from discord.Member to discord.User to allow banning non-members
         reason: str = "No reason provided",
         delete_message_days: int = 0
     ):
@@ -54,22 +54,24 @@ class BanCog(commands.Cog):
             )
             return
         
-        # Check role hierarchy
-        if interaction.user.id != interaction.guild.owner_id:  # Owner can ban anyone
-            if user.top_role >= interaction.user.top_role:
+        # Check role hierarchy (only if user is a member of the server)
+        member = interaction.guild.get_member(user.id)
+        if member:  # User is in the server, check role hierarchy
+            if interaction.user.id != interaction.guild.owner_id:  # Owner can ban anyone
+                if member.top_role >= interaction.user.top_role:
+                    await interaction.response.send_message(
+                        "<a:warning:1424944783587147868> You cannot ban someone with an equal or higher role!",
+                        ephemeral=True
+                    )
+                    return
+            
+            # Check if bot can ban this user (role hierarchy)
+            if member.top_role >= interaction.guild.me.top_role:
                 await interaction.response.send_message(
-                    "<a:warning:1424944783587147868> You cannot ban someone with an equal or higher role!",
+                    "<a:warning:1424944783587147868> I cannot ban someone with an equal or higher role than me!",
                     ephemeral=True
                 )
                 return
-        
-        # Check if bot can ban this user (role hierarchy)
-        if user.top_role >= interaction.guild.me.top_role:
-            await interaction.response.send_message(
-                "<a:warning:1424944783587147868> I cannot ban someone with an equal or higher role than me!",
-                ephemeral=True
-            )
-            return
         
         # Validate delete_message_days
         if delete_message_days < 0 or delete_message_days > 7:
