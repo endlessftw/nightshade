@@ -434,6 +434,11 @@ async def on_ready():
         print('Loaded extension: unwarn_command')
     except Exception as e:
         print(f'Could not load unwarn_command extension: {e}')
+    try:
+        await bot.load_extension('truthordare_command')
+        print('Loaded extension: truthordare_command')
+    except Exception as e:
+        print(f'Could not load truthordare_command extension: {e}')
     # logo_command removed
 
     try:

@@ -40,6 +40,7 @@ GAME_COMMANDS = [
     ("<:shadow:1424660147623694447> /shadow", "Create a shadow name for yourself or a user."),
     ("<:heart:1426125117972549703> /ship", "Calculate the relationship compatibility between two users."),
     ("<a:sniper:1425275162894532659> /snipe", "Expose the last deleted message in the current channel."),
+    ("<:tord:1430460724270075955> /truthordare", "Play a game of Truth or Dare, either solo or with a friend."),
 ]
 
 
@@ -99,6 +100,13 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(name="help", description="Show bot commands and explanations.")
     async def help(self, interaction: discord.Interaction):
+        # Check if response was already sent
+        if interaction.response.is_done():
+            return
+            
+        # Defer the response immediately to prevent timeout
+        await interaction.response.defer()
+        
         banner_path = os.path.join(os.path.dirname(__file__), "nightshadebannertwo.png")
         
         embed = discord.Embed(
@@ -107,34 +115,28 @@ class HelpCog(commands.Cog):
             color=discord.Color.blurple(),
         )
         
-        
         view = CategoryView()
         
         try:
             if os.path.isfile(banner_path):
                 file = discord.File(banner_path, filename="nightshadebannertwo.png")
-                await interaction.response.send_message(file=file, embed=embed, view=view)
+                await interaction.followup.send(file=file, embed=embed, view=view)
             else:
-                await interaction.response.send_message(embed=embed, view=view)
+                await interaction.followup.send(embed=embed, view=view)
         except discord.HTTPException as e:
             print(f"[help] HTTPException: {e}")
             try:
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(embed=embed, view=view)
-                else:
-                    await interaction.followup.send(embed=embed, view=view)
+                await interaction.followup.send(embed=embed, view=view)
             except Exception as e2:
                 print(f"[help] Fallback failed: {e2}")
                 try:
-                    if not interaction.response.is_done():
-                        await interaction.response.send_message("Failed to load help menu.", ephemeral=True)
+                    await interaction.followup.send("Failed to load help menu.", ephemeral=True)
                 except Exception:
                     pass
         except Exception as e:
             print(f"[help] Unexpected error: {e}")
             try:
-                if not interaction.response.is_done():
-                    await interaction.response.send_message("An error occurred while loading the help menu.", ephemeral=True)
+                await interaction.followup.send("An error occurred while loading the help menu.", ephemeral=True)
             except Exception:
                 pass
 
