@@ -70,8 +70,6 @@ class CategoryView(discord.ui.View):
             await interaction.response.edit_message(embed=embed, view=self)
         except Exception as e:
             print(f"Error in moderation_button: {e}")
-            if not interaction.response.is_done():
-                await interaction.response.send_message(f"Error: {e}", ephemeral=True)
     
     @discord.ui.button(label="Utilities", style=discord.ButtonStyle.primary)
     async def utilities_button(self, interaction: discord.Interaction, button: discord.ui.Button):
