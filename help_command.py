@@ -8,11 +8,14 @@ MODERATION_COMMANDS = [
     ("<:kick:1426111903037390979> /kick", "Kick a user from the server."),
     ("<:timeout:1426116778395828244> /timeout", "Temporarily timeout a user."),
     ("<:unmute:1426118353063248005> /untimeout", "Remove timeout from a user."),
-    ("<:profile:1426112264964018187> /userprofile", "Show detailed information about a user."),
+    ("<:profile:1426112264964018187> /userprofile", "Show user information."),
     ("<a:warn:1426420218518835263> /warn", "Warn a user for breaking rules."),
     ("<a:warn:1426420218518835263> /unwarn", "Remove a warning from a user."),
     ("<a:warn:1426420218518835263> /clearwarnings", "Clear all warnings of a user."),
     ("<a:warn:1426420218518835263> /warnings", "View warnings for a user."),
+    ("<a:purge:1431407576540512348> /purge", "Delete messages from the channel."),
+    ("<:lock:1431413547010621511> /lock", "Lock channel (mods only)."),
+    ("<:unlock:1431411741950218342> /unlock", "Unlock channel (everyone)."),
 ]
 
 UTILITY_COMMANDS = [
@@ -50,20 +53,25 @@ class CategoryView(discord.ui.View):
     
     @discord.ui.button(label="Moderation", style=discord.ButtonStyle.danger)
     async def moderation_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(
-            title="<:shield:1425769315873067018> Moderation Commands <:shield:1425769315873067018>",
-            description="Commands for server moderation and management.",
-            color=discord.Color.red()
-        )
-        
-        if MODERATION_COMMANDS:
-            for name, desc in MODERATION_COMMANDS:
-                embed.add_field(name=name, value=desc, inline=False)
-        else:
-            embed.description = "No moderation commands available yet."
-        
-        embed.set_footer(text="Created by s1lv3rsurf3r")
-        await interaction.response.edit_message(embed=embed, view=self)
+        try:
+            embed = discord.Embed(
+                title="<:shield:1425769315873067018> Moderation Commands <:shield:1425769315873067018>",
+                description="Commands for server moderation and management.",
+                color=discord.Color.red()
+            )
+            
+            if MODERATION_COMMANDS:
+                for name, desc in MODERATION_COMMANDS:
+                    embed.add_field(name=name, value=desc, inline=False)
+            else:
+                embed.description = "No moderation commands available yet."
+            
+            embed.set_footer(text="Created by s1lv3rsurf3r")
+            await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            print(f"Error in moderation_button: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(f"Error: {e}", ephemeral=True)
     
     @discord.ui.button(label="Utilities", style=discord.ButtonStyle.primary)
     async def utilities_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -100,12 +108,12 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(name="help", description="Show bot commands and explanations.")
     async def help(self, interaction: discord.Interaction):
-        # Check if response was already sent
-        if interaction.response.is_done():
+        # Defer the response immediately to prevent timeout (must be first!)
+        try:
+            await interaction.response.defer()
+        except discord.errors.NotFound:
+            # Interaction already expired, ignore
             return
-            
-        # Defer the response immediately to prevent timeout
-        await interaction.response.defer()
         
         banner_path = os.path.join(os.path.dirname(__file__), "nightshadebannertwo.png")
         

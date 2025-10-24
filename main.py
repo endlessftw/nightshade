@@ -435,6 +435,21 @@ async def on_ready():
     except Exception as e:
         print(f'Could not load unwarn_command extension: {e}')
     try:
+        await bot.load_extension('purge_command')
+        print('Loaded extension: purge_command')
+    except Exception as e:
+        print(f'Could not load purge_command extension: {e}')
+    try:
+        await bot.load_extension('lock_command')
+        print('Loaded extension: lock_command')
+    except Exception as e:
+        print(f'Could not load lock_command extension: {e}')
+    try:
+        await bot.load_extension('unlock_command')
+        print('Loaded extension: unlock_command')
+    except Exception as e:
+        print(f'Could not load unlock_command extension: {e}')
+    try:
         await bot.load_extension('truthordare_command')
         print('Loaded extension: truthordare_command')
     except Exception as e:
