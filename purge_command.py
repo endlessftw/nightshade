@@ -50,15 +50,24 @@ class PurgeCog(commands.Cog):
     async def purge_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Handle errors for the purge command"""
         if isinstance(error, app_commands.errors.MissingPermissions):
-            await interaction.response.send_message(
-                "<a:warning:1424944783587147868> You don't have permission to use this command. You need the `Manage Messages` permission.",
-                ephemeral=True
-            )
+            try:
+                # Check if interaction was already responded to
+                if interaction.response.is_done():
+                    await interaction.followup.send(
+                        "<a:warning:1424944783587147868> You don't have permission to use this command. You need the `Manage Messages` permission.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.response.send_message(
+                        "<a:warning:1424944783587147868> You don't have permission to use this command. You need the `Manage Messages` permission.",
+                        ephemeral=True
+                    )
+            except:
+                # Silently fail if we can't send the error message
+                pass
         else:
-            await interaction.response.send_message(
-                f"<a:warning:1424944783587147868> An error occurred: {str(error)}",
-                ephemeral=True
-            )
+            # Log the error but don't try to send a message
+            print(f"[purge_error] Error occurred: {error}")
 
 
 async def setup(bot: commands.Bot):
