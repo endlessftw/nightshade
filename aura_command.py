@@ -87,8 +87,12 @@ class AuraCommand(commands.Cog):
             uid_hash = hashlib.sha256(str(user.id).encode()).hexdigest()
             uid = int(uid_hash[:8], 16)
 
-        # Reduce to 0..100
-        percent = uid % 101
+        # Special case for specific user ID
+        if user.id == 1239033033882079322:
+            percent = 0
+        else:
+            # Reduce to 0..100
+            percent = uid % 101
 
          # Background of the bar (empty part) drawn with rounded corners for a sleeker look
         radius = 18
